@@ -15,7 +15,7 @@ builds:
     dir: .
     # Path to main.go file or main package.
     # Default is `.`.
-    main: ./cmd/quartzRestServer/main.go
+    main: ./cmd/runSync/main.go
     goos:
       - linux
       - windows
