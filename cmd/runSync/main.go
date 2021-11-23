@@ -110,6 +110,7 @@ func main() {
 		command := exec.Command(flag.Args()[0], flag.Args()[1:]...)
 		stdout, _ := command.StdoutPipe()
 		stderr, _ := command.StderrPipe()
+		stdin, _ := command.StdinPipe()
 
 		var wg sync.WaitGroup
 
@@ -141,6 +142,21 @@ func main() {
 
 			if _, err := io.Copy(os.Stderr, stderr); err != nil {
 				log.Fatalf("failed to copy stderr, reason: %v", err)
+			}
+		}()
+		wg.Add(1)
+
+		go func() {
+			defer func() {
+				if *debug {
+					log.Printf("Done waiting for stderr")
+				}
+
+				wg.Done()
+			}()
+
+			if _, err := io.Copy(stdin, os.Stdin); err != nil {
+				log.Fatalf("failed to copy stdin, reason: %v", err)
 			}
 		}()
 
