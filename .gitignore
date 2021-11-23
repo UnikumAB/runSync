@@ -2,3 +2,4 @@
 sync.ts
 sync.ts.lock
 .idea/
+dist/

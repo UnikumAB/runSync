@@ -37,3 +37,11 @@ changelog:
     exclude:
       - '^docs:'
       - '^test:'
+nfpms:
+  - package_name: runSync
+    maintainer: Per Abich / Unikum AB
+    formats:
+      - rpm
+      - apk
+      - deb
+    bindir: /usr/bin
