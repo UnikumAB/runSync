@@ -106,11 +106,6 @@ func main() {
 	maxAge := time.Now().Add(minInterval * -1)
 	if newFile || stat.ModTime().Before(maxAge) {
 		currentTime := time.Now().Local()
-		err = os.Chtimes(absoluteSyncFile, currentTime, currentTime)
-
-		if err != nil {
-			log.Fatalf("Failed to change timestamp on %q, reason: %v", absoluteSyncFile, err)
-		}
 
 		command := exec.Command(flag.Args()[0], flag.Args()[1:]...)
 		stdout, _ := command.StdoutPipe()
@@ -159,6 +154,12 @@ func main() {
 
 		if err != nil {
 			log.Fatalf("Failed to wait on process, reason: %v", err)
+		}
+
+		err = os.Chtimes(absoluteSyncFile, currentTime, currentTime)
+
+		if err != nil {
+			log.Fatalf("Failed to change timestamp on %q, reason: %v", absoluteSyncFile, err)
 		}
 	} else {
 		fileAge := time.Now().Local().Sub(stat.ModTime())
