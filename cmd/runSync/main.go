@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"flag"
 	"fmt"
 	"io"
@@ -22,15 +23,19 @@ var minIntervalParam = flag.String("maxInterval", "12h", "Minimum time between r
 func main() {
 	debug := flag.Bool("debug", false, "sets log level to debug")
 	verbose := flag.Bool("verbose", false, "Run with verbose output")
+	jsonLog := flag.Bool("json", false, "Log as JSON")
 	flag.Parse()
 	zerolog.SetGlobalLevel(zerolog.WarnLevel)
+	if !*jsonLog {
+		log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stdout, TimeFormat: time.RFC3339})
+	}
 
 	if *verbose {
-		zerolog.SetGlobalLevel(zerolog.InfoLevel)
+		zerolog.SetGlobalLevel(zerolog.DebugLevel)
 	}
 
 	if *debug {
-		zerolog.SetGlobalLevel(zerolog.DebugLevel)
+		zerolog.SetGlobalLevel(zerolog.TraceLevel)
 	}
 
 	minInterval, absoluteSyncFile, err := flags2data()
@@ -49,9 +54,9 @@ func runSync(absoluteSyncFile string, minInterval time.Duration, args []string) 
 	if len(args) < 1 {
 		return fmt.Errorf("failed to run since you failed to provide a command")
 	}
-	log.Info().Msgf("Using %q as sync", absoluteSyncFile)
+	log.Debug().Msgf("Using %q as sync", absoluteSyncFile)
 
-	log.Info().Msgf("Using %q as lockfile", absoluteSyncFile+".lock")
+	log.Debug().Msgf("Using %q as lockfile", absoluteSyncFile+".lock")
 
 	lock, err := lockfile.Create(absoluteSyncFile)
 	if err != nil {
@@ -98,7 +103,7 @@ func runSync(absoluteSyncFile string, minInterval time.Duration, args []string) 
 		return executeCommandAndTouchSyncFile(absoluteSyncFile, args)
 	} else {
 		fileAge := time.Now().Local().Sub(stat.ModTime())
-		log.Info().Msgf("Don't run. %v < %v", fileAge, minInterval)
+		log.Debug().Msgf("Don't run. %v < %v", fileAge, minInterval)
 	}
 
 	return nil
@@ -130,8 +135,8 @@ func executeCommandAndTouchSyncFile(absoluteSyncFile string, args []string) erro
 
 	wg.Add(2)
 
-	go copyAndWait(&wg, os.Stdout, stdout, "stdout")()
-	go copyAndWait(&wg, os.Stderr, stderr, "stderr")()
+	go copyAndWait(&wg, zerolog.InfoLevel, stdout, "stdout")()
+	go copyAndWait(&wg, zerolog.ErrorLevel, stderr, "stderr")()
 	command.Stdin = os.Stdin
 
 	if err := command.Start(); err != nil {
@@ -155,16 +160,16 @@ func executeCommandAndTouchSyncFile(absoluteSyncFile string, args []string) erro
 	return nil
 }
 
-func copyAndWait(wg *sync.WaitGroup, w io.Writer, r io.ReadCloser, name string) func() {
+func copyAndWait(wg *sync.WaitGroup, level zerolog.Level, r io.ReadCloser, name string) func() {
 	return func() {
 		defer func() {
-			log.Debug().Msgf("Done waiting for %v", name)
+			log.Trace().Msgf("Done waiting for %v", name)
 
 			wg.Done()
 		}()
-
-		if _, err := io.Copy(w, r); err != nil {
-			log.Fatal().Err(err).Msgf("failed to copy %v, reason", name)
+		buf := bufio.NewScanner(r)
+		for buf.Scan() {
+			log.WithLevel(level).Msg(buf.Text())
 		}
 	}
 }
