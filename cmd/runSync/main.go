@@ -26,6 +26,7 @@ func main() {
 	jsonLog := flag.Bool("json", false, "Log as JSON")
 	flag.Parse()
 	zerolog.SetGlobalLevel(zerolog.WarnLevel)
+
 	if !*jsonLog {
 		log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stdout, TimeFormat: time.RFC3339})
 	}
@@ -54,6 +55,7 @@ func runSync(absoluteSyncFile string, minInterval time.Duration, args []string) 
 	if len(args) < 1 {
 		return fmt.Errorf("failed to run since you failed to provide a command")
 	}
+
 	log.Debug().Msgf("Using %q as sync", absoluteSyncFile)
 
 	log.Debug().Msgf("Using %q as lockfile", absoluteSyncFile+".lock")
@@ -137,6 +139,7 @@ func executeCommandAndTouchSyncFile(absoluteSyncFile string, args []string) erro
 
 	go copyAndWait(&wg, zerolog.InfoLevel, stdout, "stdout")()
 	go copyAndWait(&wg, zerolog.ErrorLevel, stderr, "stderr")()
+
 	command.Stdin = os.Stdin
 
 	if err := command.Start(); err != nil {
@@ -167,7 +170,9 @@ func copyAndWait(wg *sync.WaitGroup, level zerolog.Level, r io.ReadCloser, name 
 
 			wg.Done()
 		}()
+
 		buf := bufio.NewScanner(r)
+
 		for buf.Scan() {
 			log.WithLevel(level).Msg(buf.Text())
 		}
