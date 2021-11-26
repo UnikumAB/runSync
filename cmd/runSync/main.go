@@ -46,6 +46,9 @@ func main() {
 }
 
 func runSync(absoluteSyncFile string, minInterval time.Duration, args []string) error {
+	if len(args) < 1 {
+		return fmt.Errorf("failed to run since you failed to provide a command")
+	}
 	log.Info().Msgf("Using %q as sync", absoluteSyncFile)
 
 	log.Info().Msgf("Using %q as lockfile", absoluteSyncFile+".lock")
@@ -122,15 +125,14 @@ func executeCommandAndTouchSyncFile(absoluteSyncFile string, args []string) erro
 	command := exec.Command(args[0], args[1:]...)
 	stdout, _ := command.StdoutPipe()
 	stderr, _ := command.StderrPipe()
-	stdin, _ := command.StdinPipe()
 
 	var wg sync.WaitGroup
 
-	wg.Add(3)
+	wg.Add(2)
 
 	go copyAndWait(&wg, os.Stdout, stdout, "stdout")()
 	go copyAndWait(&wg, os.Stderr, stderr, "stderr")()
-	go copyAndWait(&wg, stdin, os.Stdin, "stdin")()
+	command.Stdin = os.Stdin
 
 	if err := command.Start(); err != nil {
 		return fmt.Errorf("Failed to start, reason: %w", err)
