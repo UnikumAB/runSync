@@ -2,71 +2,62 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"io"
-	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"sync"
 	"time"
 
-	"github.com/nightlyone/lockfile"
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
+
+	"github.com/frankbraun/codechain/util/lockfile"
 )
 
 var syncFile = flag.String("syncFile", "./sync.ts", "The file used for the timestamp")
-var lockFile = flag.String("lockFile", "", "The file used for the lock. Defaults to sync file name with .lock appended.")
-var verbose = flag.Bool("verbose", false, "Run with verbose output")
-var debug = flag.Bool("debug", false, "Run with debug output")
 var minIntervalParam = flag.String("maxInterval", "12h", "Minimum time between runs i.e. 5h30m40s")
 
 func main() {
+	debug := flag.Bool("debug", false, "sets log level to debug")
+	verbose := flag.Bool("verbose", false, "Run with verbose output")
 	flag.Parse()
+	zerolog.SetGlobalLevel(zerolog.WarnLevel)
+
+	if *verbose {
+		zerolog.SetGlobalLevel(zerolog.InfoLevel)
+	}
 
 	if *debug {
-		err := flag.Set("verbose", "true")
-		if err != nil {
-			log.Fatalf("Cannot set verbose flag, reason: %v", err)
-		}
+		zerolog.SetGlobalLevel(zerolog.DebugLevel)
 	}
 
-	if *lockFile == "" {
-		*lockFile = filepath.Join(*syncFile) + ".lock"
-	}
-
-	absoluteLockFile, err := filepath.Abs(filepath.Join(*lockFile))
+	minInterval, absoluteSyncFile, err := flags2data()
 
 	if err != nil {
-		log.Fatalf("Failed to clean path to lockFile %q, reason: %v", *lockFile, err)
+		log.Fatal().Err(err)
 	}
 
-	if *verbose {
-		log.Printf("Using %q as lockfile", absoluteLockFile)
-	}
-
-	absoluteSyncFile, err := filepath.Abs(*syncFile)
-
+	err = runSync(absoluteSyncFile, minInterval, flag.Args())
 	if err != nil {
-		log.Fatalf("Failed to clean path to lockFile %q, reason: %v", *syncFile, err)
+		log.Fatal().Err(err).Msg("Failed to run sync")
 	}
+}
 
-	if *verbose {
-		log.Printf("Using %q as sync", absoluteSyncFile)
-	}
+func runSync(absoluteSyncFile string, minInterval time.Duration, args []string) error {
+	log.Info().Msgf("Using %q as sync", absoluteSyncFile)
 
-	lock, err := lockfile.New(absoluteLockFile)
+	log.Info().Msgf("Using %q as lockfile", absoluteSyncFile+".lock")
 
+	lock, err := lockfile.Create(absoluteSyncFile)
 	if err != nil {
-		log.Fatalf("Cannot init lock with %q. reason: %v", absoluteLockFile, err)
-	}
-
-	// Error handling is essential, as we only try to get the lock.
-	if err = lock.TryLock(); err != nil {
-		log.Fatalf("Cannot lock %q, reason: %v", lock, err)
+		return fmt.Errorf("cannot init lock with %q. reason: %w", absoluteSyncFile+".lock", err)
 	}
 
 	defer func() {
-		if err := lock.Unlock(); err != nil {
-			log.Fatalf("Cannot unlock %q, reason: %v", lock, err)
+		if err := lock.Release(); err != nil {
+			log.Fatal().Err(err).Msgf("Cannot unlock %q, reason", lock)
 		}
 	}()
 
@@ -78,109 +69,99 @@ func main() {
 			file, err := os.Create(absoluteSyncFile)
 
 			if err != nil {
-				log.Fatalf("Cannot create file %q, reason: %v", absoluteSyncFile, err)
+				return fmt.Errorf("Cannot create file %q, reason: %w", absoluteSyncFile, err)
 			}
 
 			err = file.Close()
 
 			if err != nil {
-				log.Panicf("Cannot close the file %q, reason: %v", absoluteSyncFile, err)
+				return fmt.Errorf("Cannot close the file %q, reason: %w", absoluteSyncFile, err)
 			}
 
 			newFile = true
 			stat, err = os.Stat(absoluteSyncFile)
 
 			if err != nil {
-				log.Panicf("Cannot get stat for %q, reason: %v", absoluteSyncFile, err)
+				return fmt.Errorf("Cannot get stat for %q, reason: %w", absoluteSyncFile, err)
 			}
 		} else {
-			log.Fatalf("Cannot open %q, reason: %v", absoluteSyncFile, err)
+			return fmt.Errorf("cannot open %q, reason: %w", absoluteSyncFile, err)
 		}
-	}
-
-	minInterval, err := time.ParseDuration(*minIntervalParam)
-	if err != nil {
-		log.Fatalf("Cannot parse minInterval %q, reason: %v", *minIntervalParam, err)
 	}
 
 	maxAge := time.Now().Add(minInterval * -1)
 	if newFile || stat.ModTime().Before(maxAge) {
-		currentTime := time.Now().Local()
-
-		command := exec.Command(flag.Args()[0], flag.Args()[1:]...)
-		stdout, _ := command.StdoutPipe()
-		stderr, _ := command.StderrPipe()
-		stdin, _ := command.StdinPipe()
-
-		var wg sync.WaitGroup
-
-		wg.Add(1)
-
-		go func() {
-			defer func() {
-				if *debug {
-					log.Printf("Done waiting for stdout")
-				}
-
-				wg.Done()
-			}()
-
-			if _, err := io.Copy(os.Stdout, stdout); err != nil {
-				log.Fatalf("failed to copy stdout, reason: %v", err)
-			}
-		}()
-		wg.Add(1)
-
-		go func() {
-			defer func() {
-				if *debug {
-					log.Printf("Done waiting for stderr")
-				}
-
-				wg.Done()
-			}()
-
-			if _, err := io.Copy(os.Stderr, stderr); err != nil {
-				log.Fatalf("failed to copy stderr, reason: %v", err)
-			}
-		}()
-		wg.Add(1)
-
-		go func() {
-			defer func() {
-				if *debug {
-					log.Printf("Done waiting for stderr")
-				}
-
-				wg.Done()
-			}()
-
-			if _, err := io.Copy(stdin, os.Stdin); err != nil {
-				log.Fatalf("failed to copy stdin, reason: %v", err)
-			}
-		}()
-
-		if err := command.Start(); err != nil {
-			log.Fatalf("Failed to start, reason: %v", err)
-		}
-
-		log.Printf("Executing %q", command.String())
-		wg.Wait()
-		err := command.Wait()
-
-		if err != nil {
-			log.Fatalf("Failed to wait on process, reason: %v", err)
-		}
-
-		err = os.Chtimes(absoluteSyncFile, currentTime, currentTime)
-
-		if err != nil {
-			log.Fatalf("Failed to change timestamp on %q, reason: %v", absoluteSyncFile, err)
-		}
+		return executeCommandAndTouchSyncFile(absoluteSyncFile, args)
 	} else {
 		fileAge := time.Now().Local().Sub(stat.ModTime())
-		if *verbose {
-			log.Printf("Don't run. %v < %v", fileAge, minInterval)
+		log.Info().Msgf("Don't run. %v < %v", fileAge, minInterval)
+	}
+
+	return nil
+}
+
+func flags2data() (time.Duration, string, error) {
+	minInterval, err := time.ParseDuration(*minIntervalParam)
+	if err != nil {
+		return 0, "", fmt.Errorf("cannot parse minInterval %q, reason: %w", *minIntervalParam, err)
+	}
+
+	absoluteSyncFile, err := filepath.Abs(*syncFile)
+
+	if err != nil {
+		return 0, "", fmt.Errorf("failed to clean path to lockFile %q, reason: %w", *syncFile, err)
+	}
+
+	return minInterval, absoluteSyncFile, nil
+}
+
+func executeCommandAndTouchSyncFile(absoluteSyncFile string, args []string) error {
+	currentTime := time.Now().Local()
+
+	command := exec.Command(args[0], args[1:]...)
+	stdout, _ := command.StdoutPipe()
+	stderr, _ := command.StderrPipe()
+	stdin, _ := command.StdinPipe()
+
+	var wg sync.WaitGroup
+
+	wg.Add(3)
+
+	go copyAndWait(&wg, os.Stdout, stdout, "stdout")()
+	go copyAndWait(&wg, os.Stderr, stderr, "stderr")()
+	go copyAndWait(&wg, stdin, os.Stdin, "stdin")()
+
+	if err := command.Start(); err != nil {
+		return fmt.Errorf("Failed to start, reason: %w", err)
+	}
+
+	log.Printf("Executing %q", command.String())
+	wg.Wait()
+	err := command.Wait()
+
+	if err != nil {
+		return fmt.Errorf("Failed to wait on process, reason: %w", err)
+	}
+
+	err = os.Chtimes(absoluteSyncFile, currentTime, currentTime)
+
+	if err != nil {
+		return fmt.Errorf("Failed to change timestamp on %q, reason: %w", absoluteSyncFile, err)
+	}
+
+	return nil
+}
+
+func copyAndWait(wg *sync.WaitGroup, w io.Writer, r io.ReadCloser, name string) func() {
+	return func() {
+		defer func() {
+			log.Debug().Msgf("Done waiting for %v", name)
+
+			wg.Done()
+		}()
+
+		if _, err := io.Copy(w, r); err != nil {
+			log.Fatal().Err(err).Msgf("failed to copy %v, reason", name)
 		}
 	}
 }
