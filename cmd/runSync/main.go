@@ -52,6 +52,7 @@ func runSync(absoluteSyncFile string, minInterval time.Duration, args []string) 
 
 	lock, err := lockfile.Create(absoluteSyncFile)
 	if err != nil {
+		log.Warn().Err(err).Msgf("cannot init lock with %q. reason", absoluteSyncFile+".lock")
 		return fmt.Errorf("cannot init lock with %q. reason: %w", absoluteSyncFile+".lock", err)
 	}
 
