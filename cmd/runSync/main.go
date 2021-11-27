@@ -24,7 +24,7 @@ func main() {
 	verbose := flag.Bool("verbose", false, "Run with verbose output")
 	jsonLog := flag.Bool("json", false, "Log as JSON")
 	flag.Parse()
-	zerolog.SetGlobalLevel(zerolog.WarnLevel)
+	zerolog.SetGlobalLevel(zerolog.InfoLevel)
 
 	if !*jsonLog {
 		log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stdout, TimeFormat: time.RFC3339})
