@@ -8,13 +8,12 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runSync/lockfile"
 	"sync"
 	"time"
 
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
-
-	"github.com/frankbraun/codechain/util/lockfile"
 )
 
 var syncFile = flag.String("syncFile", "./sync.ts", "The file used for the timestamp")
