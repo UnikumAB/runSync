@@ -18,16 +18,28 @@ import (
 
 var syncFile = flag.String("syncFile", "./sync.ts", "The file used for the timestamp")
 var minIntervalParam = flag.String("maxInterval", "12h", "Minimum time between runs i.e. 5h30m40s")
+var (
+	version = "dev"
+	commit  = "none"
+	date    = "unknown"
+	builtBy = "unknown"
+)
 
 func main() {
 	debug := flag.Bool("debug", false, "sets log level to debug")
 	verbose := flag.Bool("verbose", false, "Run with verbose output")
 	jsonLog := flag.Bool("json", false, "Log as JSON")
+	versionFlag := flag.Bool("version", false, "Version of the program")
 	flag.Parse()
 	zerolog.SetGlobalLevel(zerolog.InfoLevel)
 
 	if !*jsonLog {
 		log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stdout, TimeFormat: time.RFC3339})
+	}
+
+	if *versionFlag {
+		log.Info().Msgf("runSync %s, commit %s, built at %s by %s", version, commit, date, builtBy)
+		return
 	}
 
 	if *verbose {
