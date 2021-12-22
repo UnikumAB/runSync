@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -72,8 +73,15 @@ func runSync(absoluteSyncFile string, minInterval time.Duration, args []string) 
 	log.Debug().Msgf("Using %q as lockfile", absoluteSyncFile+".lock")
 
 	lock, err := lockfile.Create(absoluteSyncFile)
+
 	if err != nil {
+		if errors.Is(err, lockfile.LockError{}) {
+			log.Warn().Err(err).Msgf("Lock not available: %v", err)
+			return nil
+		}
+
 		log.Warn().Err(err).Msgf("cannot init lock with %q. reason", absoluteSyncFile+".lock")
+
 		return fmt.Errorf("cannot init lock with %q. reason: %w", absoluteSyncFile+".lock", err)
 	}
 

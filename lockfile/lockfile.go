@@ -17,6 +17,16 @@ const lockSuffix = ".lock"
 // Lock is lockfile to limit a binary to one process per anchor file.
 type Lock string
 
+type LockError struct {
+	Filename string
+	Hostname string
+	Pid      int
+}
+
+func (e LockError) Error() string {
+	return fmt.Sprintf("lockfile: %s: already exists (Host %v, PID %d)", e.Filename, e.Hostname, e.Pid)
+}
+
 // Create a lock for the given binary anchorFile.
 // Returns an error if the lock already exists.
 func Create(anchorFile string) (Lock, error) {
@@ -46,12 +56,20 @@ func Create(anchorFile string) (Lock, error) {
 			if !alive {
 				_ = os.Remove(filename)
 			} else {
-				return "", fmt.Errorf("lockfile: %s: already exists (PID %d)",
-					filename, pid)
+				le := LockError{
+					Filename: filename,
+					Hostname: hostname,
+					Pid:      pid,
+				}
+				return "", le
 			}
 		} else {
-			return "", fmt.Errorf("lockfile: %s: already exists (Host %v, PID %d)",
-				filename, hostname, pid)
+			le := LockError{
+				Filename: filename,
+				Hostname: hostname,
+				Pid:      pid,
+			}
+			return "", le
 		}
 	}
 
