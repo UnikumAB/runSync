@@ -75,7 +75,8 @@ func runSync(absoluteSyncFile string, minInterval time.Duration, args []string) 
 	lock, err := lockfile.Create(absoluteSyncFile)
 
 	if err != nil {
-		if errors.Is(err, lockfile.LockError{}) {
+		var le lockfile.LockError
+		if errors.As(err, &le) {
 			log.Warn().Err(err).Msgf("Lock not available: %v", err)
 			return nil
 		}
