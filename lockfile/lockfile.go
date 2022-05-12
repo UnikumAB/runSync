@@ -10,6 +10,8 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+
+	"github.com/pkg/errors"
 )
 
 const lockSuffix = ".lock"
@@ -37,12 +39,12 @@ func Create(anchorFile string) (Lock, error) {
 		// file exists
 		line, err := ioutil.ReadFile(filename)
 		if err != nil {
-			return "", fmt.Errorf("lockfile: %s: %w", filename, err)
+			return "", errors.Wrapf(err, "lockfile: %s", filename)
 		}
 
 		hostname, pid, err := parseFileContent(line)
 		if err != nil {
-			return "", fmt.Errorf("lockfile: %s: already exists", filename)
+			return "", errors.Wrapf(err, "lockfile: %s: already exists", filename)
 		}
 
 		currentHostname, err := os.Hostname()

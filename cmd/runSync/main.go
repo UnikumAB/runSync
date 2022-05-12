@@ -77,18 +77,19 @@ func runSync(absoluteSyncFile string, minInterval time.Duration, args []string) 
 	if err != nil {
 		var le lockfile.LockError
 		if errors.As(err, &le) {
-			log.Warn().Err(err).Msgf("Lock not available: %v", err)
+			log.Info().Err(err).Msgf("Lock not available: %v", le.Filename)
 			return nil
 		}
 
-		log.Warn().Err(err).Msgf("cannot init lock with %q. reason", absoluteSyncFile+".lock")
+		log.Warn().Err(err).Msgf("cannot init lock with %q. reason", lock)
 
 		return fmt.Errorf("cannot init lock with %q. reason: %w", absoluteSyncFile+".lock", err)
 	}
 
 	defer func() {
+		filename := string(lock)
 		if err := lock.Release(); err != nil {
-			log.Fatal().Err(err).Msgf("Cannot unlock %q, reason", lock)
+			log.Fatal().Err(err).Msgf("Cannot unlock %q, reason", filename)
 		}
 	}()
 

@@ -2,6 +2,7 @@ default:        test
 
 test:   golangci-lint
 	go test -v -race ./...
+	( rm sync.ts; go run ./cmd/runSync/main.go sleep 1 & go run ./cmd/runSync/main.go sleep 1 & wait ) && echo done
 
 fmt:
 	gofmt -w .
