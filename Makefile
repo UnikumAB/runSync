@@ -9,7 +9,7 @@ fmt:
 
 golangci-lint:
 ifeq (, $(shell which golangci-lint))
-        curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v1.43.0
+        curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v1.46.1
 endif
 	golangci-lint run --fix ./...
 
